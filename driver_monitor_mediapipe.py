@@ -1,7 +1,7 @@
 import cv2
 import mediapipe as mp
-# mediapipe openvino - adas dlib
 import numpy as np
+import math
 
 # MediaPipe Face Mesh 초기화
 mp_face_mesh = mp.solutions.face_mesh
@@ -11,17 +11,19 @@ face_mesh = mp_face_mesh.FaceMesh(
     min_detection_confidence=0.5,
     min_tracking_confidence=0.5)
 
-# Media pipe 눈 랜드마크
+# Media pipe 눈 랜드마크 인덱스
 LEFT_EYE_VERTICAL_IDX = [159, 145]
 LEFT_EYE_HORIZONTAL_IDX = [33, 133]
 RIGHT_EYE_VERTICAL_IDX = [386, 374]
 RIGHT_EYE_HORIZONTAL_IDX = [362, 263]
 
 # 졸음 판단을 위한 Threshold
-# 실험을 통해 수정필요
 EAR_THRESHOLD = 0.25
 CONSECUTIVE_FRAMES = 15
 frame_counter = 0
+
+# Debug 
+Debug = False
 
 # Webcam 실행
 cap = cv2.VideoCapture(0)
@@ -33,28 +35,37 @@ while cap.isOpened():
         break
 
     # Mediapipe 성능 향상을 위한 전처리
-    image.flags.writeable = False  
+    image.flags.writeable = False
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     image = cv2.flip(image, 1)
 
     # MediaPipe 처리
     results = face_mesh.process(image)
 
-    # Readable만 한 image를 수정
-    image.flags.writeable = True  
+    # 다시 쓰기 가능 상태로 변경 및 색상 원복
+    image.flags.writeable = True
     image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
     
     img_h, img_w, _ = image.shape
     face_found = False
 
     if results.multi_face_landmarks:
-        # Landmark를 추출하였으면, face가 detected 되었다고 파악
         face_found = True
         for face_landmarks in results.multi_face_landmarks:
             landmarks_positions = np.array(
                 [(lm.x * img_w, lm.y * img_h) for lm in face_landmarks.landmark],
                 dtype=np.int32
             )
+
+            # Debug: EAR 계산에 사용되는 눈 랜드마크 시각화
+            if Debug:
+                ear_landmarks_indices = (
+                    LEFT_EYE_VERTICAL_IDX + LEFT_EYE_HORIZONTAL_IDX +
+                    RIGHT_EYE_VERTICAL_IDX + RIGHT_EYE_HORIZONTAL_IDX
+                )
+                for idx in ear_landmarks_indices:
+                    pt = landmarks_positions[idx]
+                    cv2.circle(image, tuple(pt), 2, (0, 255, 255), -1) # 노란색 원 그리기
 
             # EAR 계산
             left_v_dist = np.linalg.norm(landmarks_positions[LEFT_EYE_VERTICAL_IDX[0]] - landmarks_positions[LEFT_EYE_VERTICAL_IDX[1]])
@@ -105,11 +116,26 @@ while cap.isOpened():
                 cv2.putText(image, f"Pitch: {pitch:.2f}", (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
                 cv2.putText(image, f"Yaw: {yaw:.2f}", (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
                 cv2.putText(image, f"Roll: {roll:.2f}", (10, 150), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
+                
+                # Debug: Pitch, Yaw, Roll 3D 축 시각화
+                if Debug:
+                    # 3D 축의 끝점을 정의 (축의 길이는 100)
+                    axis_3d = np.float32([[100, 0, 0], [0, 100, 0], [0, 0, -100]])
+                    # 3D 축을 2D 이미지 평면에 투영
+                    axis_2d, _ = cv2.projectPoints(axis_3d, rot_vec, trans_vec, cam_matrix, dist_matrix)
+                    
+                    # 코 끝점 (축의 시작점)
+                    nose_tip_2d = tuple(landmarks_positions[1])
+                    
+                    # 각 축을 다른 색상으로 그리기
+                    cv2.line(image, nose_tip_2d, tuple(np.int32(axis_2d[0].ravel())), (255, 0, 0), 3) # X축 (빨강)
+                    cv2.line(image, nose_tip_2d, tuple(np.int32(axis_2d[1].ravel())), (0, 255, 0), 3) # Y축 (초록)
+                    cv2.line(image, nose_tip_2d, tuple(np.int32(axis_2d[2].ravel())), (0, 0, 255), 3) # Z축 (파랑)
+
 
                 if pitch > 15 or abs(yaw) > 20:
                     cv2.putText(image, "ATTENTION ALERT!", (10, 180), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
     
-    # 4. 얼굴 유무 판단
     if not face_found:
         cv2.putText(image, "FACE NOT FOUND", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
