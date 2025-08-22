@@ -21,7 +21,6 @@ RIGHT_EYE_HORIZONTAL_IDX = [362, 263]
 EAR_THRESHOLD = 0.25
 CONSECUTIVE_FRAMES = 15
 frame_counter = 0
-
 # Debug 
 Debug = False
 
@@ -89,25 +88,32 @@ while cap.isOpened():
                 frame_counter = 0
 
             # 얼굴 각도 추정 (Head Pose Estimation)
-            face_3d = []
+            model_points_3d = np.array([
+                (0.0, 0.0, 0.0),             # 1번: 코 끝 (Nose tip)
+                (0.0, -330.0, -65.0),        # 199번: 턱 (Chin)
+                (-225.0, 170.0, -135.0),     # 33번: 왼쪽 눈의 왼쪽 끝 (Left eye left corner)
+                (225.0, 170.0, -135.0),      # 263번: 오른쪽 눈의 오른쪽 끝 (Right eye right corner)
+                (-150.0, -150.0, -125.0),    # 61번: 왼쪽 입가 (Left mouth corner)
+                (150.0, -150.0, -125.0)      # 291번: 오른쪽 입가 (Right mouth corner)
+            ])
+            
+            # 2. 3D 모델에 대응하는 2D 랜드마크 좌표 추출
             face_2d = []
-            key_landmarks_idx = [33, 263, 1, 61, 291, 199] 
-
-            for idx, lm in enumerate(face_landmarks.landmark):
-                if idx in key_landmarks_idx:
-                    x, y = int(lm.x * img_w), int(lm.y * img_h)
-                    face_2d.append([x, y])
-                    face_3d.append([x, y, lm.z * 3000])
+            # key_landmarks_idx 순서는 위 model_points_3d 순서와 일치해야 함
+            key_landmarks_idx = [1, 199, 33, 263, 61, 291]
+            for idx in key_landmarks_idx:
+                lm = face_landmarks.landmark[idx]
+                x, y = int(lm.x * img_w), int(lm.y * img_h)
+                face_2d.append([x, y])
 
             face_2d = np.array(face_2d, dtype=np.float64)
-            face_3d = np.array(face_3d, dtype=np.float64)
 
+            # 3. 카메라 정보 설정 및 solvePnP 실행
             focal_length = 1 * img_w
             cam_matrix = np.array([[focal_length, 0, img_h / 2], [0, focal_length, img_w / 2], [0, 0, 1]])
             dist_matrix = np.zeros((4, 1), dtype=np.float64)
 
-            success, rot_vec, trans_vec = cv2.solvePnP(face_3d, face_2d, cam_matrix, dist_matrix)
-            
+            success, rot_vec, trans_vec = cv2.solvePnP(model_points_3d, face_2d, cam_matrix, dist_matrix)
             if success:
                 rot_mat, _ = cv2.Rodrigues(rot_vec)
                 angles, _, _, _, _, _ = cv2.RQDecomp3x3(rot_mat)
