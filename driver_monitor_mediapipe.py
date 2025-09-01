@@ -12,9 +12,13 @@ face_mesh = mp_face_mesh.FaceMesh(
     min_tracking_confidence=0.5)
 
 # Media pipe 눈 랜드마크 인덱스
-LEFT_EYE_VERTICAL_IDX = [159, 145]
+LEFT_EYE_VERTICAL_IDX_1 = [160, 144]
+LEFT_EYE_VERTICAL_IDX_2 = [158, 153]
 LEFT_EYE_HORIZONTAL_IDX = [33, 133]
-RIGHT_EYE_VERTICAL_IDX = [386, 374]
+
+RIGHT_EYE_VERTICAL_IDX_1 = [385, 380]
+RIGHT_EYE_VERTICAL_IDX_2 = [387, 373]
+
 RIGHT_EYE_HORIZONTAL_IDX = [362, 263]
 
 # 졸음 판단을 위한 Threshold
@@ -22,7 +26,7 @@ EAR_THRESHOLD = 0.25
 CONSECUTIVE_FRAMES = 15
 frame_counter = 0
 # Debug 
-Debug = False
+Debug = True
 
 # Webcam 실행
 cap = cv2.VideoCapture(0)
@@ -59,18 +63,18 @@ while cap.isOpened():
             # Debug: EAR 계산에 사용되는 눈 랜드마크 시각화
             if Debug:
                 ear_landmarks_indices = (
-                    LEFT_EYE_VERTICAL_IDX + LEFT_EYE_HORIZONTAL_IDX +
-                    RIGHT_EYE_VERTICAL_IDX + RIGHT_EYE_HORIZONTAL_IDX
+                    LEFT_EYE_VERTICAL_IDX_1 + LEFT_EYE_VERTICAL_IDX_2 + LEFT_EYE_HORIZONTAL_IDX +
+                    RIGHT_EYE_VERTICAL_IDX_1 + RIGHT_EYE_VERTICAL_IDX_2 + RIGHT_EYE_HORIZONTAL_IDX
                 )
                 for idx in ear_landmarks_indices:
                     pt = landmarks_positions[idx]
                     cv2.circle(image, tuple(pt), 2, (0, 255, 255), -1) # 노란색 원 그리기
 
             # EAR 계산
-            left_v_dist = np.linalg.norm(landmarks_positions[LEFT_EYE_VERTICAL_IDX[0]] - landmarks_positions[LEFT_EYE_VERTICAL_IDX[1]])
+            left_v_dist = (np.linalg.norm(landmarks_positions[LEFT_EYE_VERTICAL_IDX_1[0]] - landmarks_positions[LEFT_EYE_VERTICAL_IDX_1[1]]) + np.linalg.norm(landmarks_positions[LEFT_EYE_VERTICAL_IDX_2[0]] - landmarks_positions[LEFT_EYE_VERTICAL_IDX_2[1]])) / 2
             left_h_dist = np.linalg.norm(landmarks_positions[LEFT_EYE_HORIZONTAL_IDX[0]] - landmarks_positions[LEFT_EYE_HORIZONTAL_IDX[1]])
             
-            right_v_dist = np.linalg.norm(landmarks_positions[RIGHT_EYE_VERTICAL_IDX[0]] - landmarks_positions[RIGHT_EYE_VERTICAL_IDX[1]])
+            right_v_dist = (np.linalg.norm(landmarks_positions[RIGHT_EYE_VERTICAL_IDX_1[0]] - landmarks_positions[RIGHT_EYE_VERTICAL_IDX_1[1]]) + np.linalg.norm(landmarks_positions[RIGHT_EYE_VERTICAL_IDX_2[0]] - landmarks_positions[RIGHT_EYE_VERTICAL_IDX_2[1]])) / 2
             right_h_dist = np.linalg.norm(landmarks_positions[RIGHT_EYE_HORIZONTAL_IDX[0]] - landmarks_positions[RIGHT_EYE_HORIZONTAL_IDX[1]])
             
             left_ear = left_v_dist / left_h_dist if left_h_dist != 0 else 0
@@ -99,7 +103,7 @@ while cap.isOpened():
             
             # 2. 3D 모델에 대응하는 2D 랜드마크 좌표 추출
             face_2d = []
-            # key_landmarks_idx 순서는 위 model_points_3d 순서와 일치해야 함
+            # key_landmarks_idx 순서는 위 model_points_3d 순서와 일치
             key_landmarks_idx = [1, 199, 33, 263, 61, 291]
             for idx in key_landmarks_idx:
                 lm = face_landmarks.landmark[idx]
