@@ -21,6 +21,10 @@ RIGHT_EYE_VERTICAL_IDX_2 = [387, 373]
 
 RIGHT_EYE_HORIZONTAL_IDX = [362, 263]
 
+# EAR Area를 위한 랜드마크
+LEFT_EYE_CONTOUR_IDX = [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246]
+RIGHT_EYE_CONTOUR_IDX = [362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385, 384, 398]
+
 # 졸음 판단을 위한 Threshold
 EAR_THRESHOLD = 0.25
 CONSECUTIVE_FRAMES = 15
@@ -30,6 +34,19 @@ Debug = True
 
 # Webcam 실행
 cap = cv2.VideoCapture(0)
+
+def polygon_area(coords):
+    """신발끈 공식을 사용하여 다각형 넓이 계산"""
+    return 0.5 * np.abs(np.dot(coords[:, 0], np.roll(coords[:, 1], 1)) - np.dot(coords[:, 1], np.roll(coords[:, 0], 1)))
+
+def calculate_ear_area(eye_contour_idx, landmarks_positions):
+    """눈 윤곽선 전체를 사용하여 EAR-Area(면적 비율)를 계산"""
+    eye_contour_coords = landmarks_positions[eye_contour_idx]
+    eye_area = polygon_area(eye_contour_coords)
+    p1 = landmarks_positions[eye_contour_idx[0]]
+    p9 = landmarks_positions[eye_contour_idx[8]]
+    hor_dist = np.linalg.norm(p1 - p9)
+    return eye_area / (hor_dist ** 2) if hor_dist != 0 else 0.0
 
 while cap.isOpened():
     success, image = cap.read()
@@ -127,6 +144,10 @@ while cap.isOpened():
                 cv2.putText(image, f"Yaw: {yaw:.2f}", (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
                 cv2.putText(image, f"Roll: {roll:.2f}", (10, 150), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
                 
+                left_ear_area = calculate_ear_area(LEFT_EYE_CONTOUR_IDX, landmarks_positions)
+                right_ear_area = calculate_ear_area(RIGHT_EYE_CONTOUR_IDX, landmarks_positions)
+                ear_area = (left_ear_area + right_ear_area) / 2
+                cv2.putText(image, f"EAR-Area: {ear_area:.3f}", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
                 # Debug: Pitch, Yaw, Roll 3D 축 시각화
                 if Debug:
                     # 3D 축의 끝점을 정의 (축의 길이는 100)
@@ -134,6 +155,9 @@ while cap.isOpened():
                     # 3D 축을 2D 이미지 평면에 투영
                     axis_2d, _ = cv2.projectPoints(axis_3d, rot_vec, trans_vec, cam_matrix, dist_matrix)
                     
+                    # EAR-Area: 눈 전체 윤곽선 (하늘색)
+                    cv2.polylines(image, [landmarks_positions[LEFT_EYE_CONTOUR_IDX]], True, (255, 255, 0), 1)
+                    cv2.polylines(image, [landmarks_positions[RIGHT_EYE_CONTOUR_IDX]], True, (255, 255, 0), 1)
                     # 코 끝점 (축의 시작점)
                     nose_tip_2d = tuple(landmarks_positions[1])
                     
